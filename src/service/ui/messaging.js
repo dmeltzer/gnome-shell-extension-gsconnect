@@ -594,7 +594,6 @@ const ConversationWidget = GObject.registerClass({
 
             row.avatar = new Contacts.Avatar(this.contacts[row.sender]);
             row.avatar.valign = Gtk.Align.END;
-            row.grid.attach(row.avatar, 0, 1, 1, 1);
 
             row.senderLabel = new Gtk.Label({
                 label: '<span size="small" weight="bold">' + this.contacts[row.sender].name + '</span>',
@@ -607,10 +606,12 @@ const ConversationWidget = GObject.registerClass({
             row.grid.attach(row.senderLabel, 1, 0, 1, 1);
         }
 
+
         let widget = new MessageLabel(message);
         row.grid.attach(widget, 1, 1, 1, 1);
 
         row.show_all();
+        row.senderLabel.visible = message.addresses.length > 1;
 
         return row;
     }
@@ -666,6 +667,7 @@ const ConversationWidget = GObject.registerClass({
                    row.sender.equalsPhoneNumber(before.sender)) {
             setAvatarVisible(before, false);
             setAvatarVisible(row, true);
+
             if (row.senderLabel) {
                 row.senderLabel.visible = false;
             }
