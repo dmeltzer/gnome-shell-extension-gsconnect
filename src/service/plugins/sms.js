@@ -197,7 +197,7 @@ var Plugin = GObject.registerClass({
      * @param {Object[]} messages - A list of message objects
      * @param {string[]} thread_ids - A list of thread IDs as strings
      */
-    _handleDigest(messages, thread_ids) {
+    async _handleDigest(messages, thread_ids) {
         // Prune threads
         for (let thread_id of Object.keys(this.threads)) {
             if (!thread_ids.includes(thread_id)) {
@@ -206,23 +206,28 @@ var Plugin = GObject.registerClass({
         }
 
         // Request each new or newer thread
+        // Run as two separate loops so that conversations populate before message fetching.
         for (let i = 0, len = messages.length; i < len; i++) {
             let message = messages[i];
             let cache = this.threads[message.thread_id];
-
+            this._handleThread([message]);
             // If this message is marked read and it's for an existing
             // thread, we should mark the rest in this thread as read
             if (cache && message.read === MessageStatus.READ) {
                 cache.forEach(msg => msg.read = MessageStatus.READ);
             }
+        }
 
+        // Populate message cache
+        for (let i = 0, len = messages.length; i <len; i++) {
+            let message = messages[i];
+            let cache = this.threads[message.thread_id];
             // If we don't have a thread for this message or it's newer
             // than the last message in the cache, request the thread
             if (!cache || cache[cache.length - 1].date < message.date) {
                 this.requestConversation(message.thread_id);
             }
         }
-
         this.__cache_write();
         this.notify('threads');
     }
@@ -294,7 +299,7 @@ var Plugin = GObject.registerClass({
      *
      * @param {object[]} messages - A list of sms message objects
      */
-    _handleMessages(messages) {
+    async _handleMessages(messages) {
         try {
             // If messages is empty there's nothing to do...
             if (messages.length === 0) return;
@@ -321,7 +326,7 @@ var Plugin = GObject.registerClass({
 
             // If there's multiple thread_id's it's a summary of threads
             if (thread_ids.some(id => id !== thread_ids[0])) {
-                this._handleDigest(messages, thread_ids);
+                await this._handleDigest(messages, thread_ids);
 
             // Otherwise this is single thread or new message
             } else {
@@ -336,8 +341,13 @@ var Plugin = GObject.registerClass({
      * Request a list of messages from a single thread.
      *
      * @param {Number} thread_id - The id of the thread to request
+     * @param {Number} numberToGet - Amount of messages to fetch from database
+     * @param {Number} beforeTimestamp - Starting point for fetching messages
      */
     requestConversation(thread_id) {
+
+
+        debug("Requesting conversation: " + thread_id);
         this.device.sendPacket({
             type: 'kdeconnect.sms.request_conversation',
             body: {

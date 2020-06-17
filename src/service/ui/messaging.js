@@ -710,7 +710,7 @@ const ConversationWidget = GObject.registerClass({
     }
 
     _sortMessages(row1, row2) {
-        return (row1.date > row2.date) ? 1 : -1;
+        return (row1.message.date > row2.message.date) ? 1 : -1;
     }
 
     /**
@@ -751,7 +751,8 @@ const ConversationWidget = GObject.registerClass({
 
             // TODO: Unsupported MessageBox
             if (message.type !== Sms.MessageBox.INBOX &&
-                message.type !== Sms.MessageBox.SENT) {
+                message.type !== Sms.MessageBox.SENT &&
+                message.type !== Sms.MessageBox.ALL ) {
                 throw TypeError(`invalid message box "${message.type}"`);
             }
 
@@ -888,7 +889,10 @@ var Window = GObject.registerClass({
         // Create a conversation widget if there isn't one
         let conversation = this.stack.get_child_by_name(thread_id);
         let thread = this.plugin.threads[thread_id];
-
+        if(thread.length ===1) {
+            // Fetch information for thread.
+            this.plugin.requestConversation(thread_id);
+        }
         if (conversation === null) {
             if (!thread) {
                 debug(`Thread ID ${thread_id} not found`);
