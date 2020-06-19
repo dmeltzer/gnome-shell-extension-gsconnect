@@ -710,6 +710,10 @@ const ConversationWidget = GObject.registerClass({
     }
 
     _sortMessages(row1, row2) {
+
+        // If we only have one message
+        if (!row1.message || !row2.message)
+            return true;
         return (row1.message.date > row2.message.date) ? 1 : -1;
     }
 
@@ -889,7 +893,7 @@ var Window = GObject.registerClass({
         // Create a conversation widget if there isn't one
         let conversation = this.stack.get_child_by_name(thread_id);
         let thread = this.plugin.threads[thread_id];
-        if(thread.length ===1) {
+        if (thread.length === 1) {
             // Fetch information for thread.
             this.plugin.requestConversation(thread_id);
         }
@@ -979,13 +983,13 @@ var Window = GObject.registerClass({
     _onThreadsChanged() {
         // Get the last message in each thread
         let messages = {};
+        let threads = this.plugin.threads;
 
-        for (let [thread_id, thread] of Object.entries(this.plugin.threads)) {
-            let message = thread[thread.length - 1];
-
+        for (let thread of threads) {
+            let message = thread.firstMessage;
             // Skip messages without a body (eg. MMS messages without text)
             if (message.body) {
-                messages[thread_id] = thread[thread.length - 1];
+                messages[thread.id] = thread.messages()[thread.length - 1];
             }
         }
 

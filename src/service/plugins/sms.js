@@ -9,7 +9,8 @@ const Messaging = imports.service.ui.messaging;
 const TelephonyUI = imports.service.ui.telephony;
 const URI = imports.utils.uri;
 
-
+const { ThreadCache } = imports.utils.threadcache;
+const { Thread } = imports.utils.thread;
 var Metadata = {
     label: _('SMS'),
     id: 'org.gnome.Shell.Extensions.GSConnect.Plugin.SMS',
@@ -144,9 +145,10 @@ var Plugin = GObject.registerClass({
     }
 
     get threads() {
-        if (this._threads === undefined)
-            this._threads = {};
-
+        if (this._threads === undefined) {
+            debug("Thread Cache undefined, trying to fix");
+            this._threads= new ThreadCache();
+        }
         return this._threads;
     }
 
@@ -177,12 +179,14 @@ var Plugin = GObject.registerClass({
     }
 
     clearCache() {
-        this._threads = {};
+        this._threads = new ThreadCache();
         this.__cache_write();
         this.notify('threads');
     }
 
     cacheLoaded() {
+        // Recreate it as a full on object.
+        this._threads = ThreadCache.fromJSON(this._threads);
         this.notify('threads');
     }
 
@@ -199,35 +203,34 @@ var Plugin = GObject.registerClass({
      */
     async _handleDigest(messages, thread_ids) {
         // Prune threads
-        for (let thread_id of Object.keys(this.threads)) {
+        for (let thread_id of this.threads) {
             if (!thread_ids.includes(thread_id)) {
-                delete this.threads[thread_id];
+               this.threads.removeThread(thread_id);
             }
         }
+
 
         // Request each new or newer thread
         // Run as two separate loops so that conversations populate before message fetching.
         for (let i = 0, len = messages.length; i < len; i++) {
             let message = messages[i];
-            let cache = this.threads[message.thread_id];
-            this._handleThread([message]);
-            // If this message is marked read and it's for an existing
-            // thread, we should mark the rest in this thread as read
-            if (cache && message.read === MessageStatus.READ) {
-                cache.forEach(msg => msg.read = MessageStatus.READ);
+
+            // Handle existing threads
+            let thread = this.threads.getThread(message.thread_id);
+            if (thread && message.read === MessageStatus.READ) {
+                for (let msg of thread) {
+                    msg.read = MessageStatus.read;
+                }
+                // Can we implement foreach on the thread?
+                // thread.forEach(msg => msg.read = MessageStatus.READ);
+                this._handleThread(thread);
+            } else {
+                thread = this.threads.createThread(message);
             }
         }
 
-        // Populate message cache
-        for (let i = 0, len = messages.length; i <len; i++) {
-            let message = messages[i];
-            let cache = this.threads[message.thread_id];
-            // If we don't have a thread for this message or it's newer
-            // than the last message in the cache, request the thread
-            if (!cache || cache[cache.length - 1].date < message.date) {
-                this.requestConversation(message.thread_id);
-            }
-        }
+        this.threads.newestCachedTime = (GLib.DateTime.new_now_local().to_unix() * 1000);
+
         this.__cache_write();
         this.notify('threads');
     }
@@ -254,38 +257,20 @@ var Plugin = GObject.registerClass({
     /**
      * Parse a conversation (thread of messages) and sort them
      *
-     * @param {Object[]} thread - A list of sms message objects from a thread
+     * @param {Thread} thread - A list of sms message objects from a thread
      */
     _handleThread(thread) {
         try {
+            if(!thread.hasOwnProperty('messages'))
+                return; // Something wrong with this thread.
+            let firstMessage = thread.messages[0];
             // If there are no addresses this will cause major problems...
-            if (!thread[0].addresses || !thread[0].addresses[0]) return;
+            if (!firstMessage.addresses || !firstMessage.addresses[0]) return;
 
-            let thread_id = thread[0].thread_id;
-            let cache = this.threads[thread_id] || [];
-
-            // Handle each message
-            for (let i = 0, len = thread.length; i < len; i++) {
-                let message = thread[i];
-
-                // TODO: invalid MessageBox
-                if (message.type < 0 || message.type > 5) continue;
-
-                // If the message exists, just update it
-                let cacheMessage = cache.find(m => m.date === message.date);
-
-                if (cacheMessage) {
-                    Object.assign(cacheMessage, message);
-                } else {
-                    cache.push(message);
-                    this._handleMessage(message);
-                }
-            }
-
-            // Sort the thread by ascending date and write to cache
-            this.threads[thread_id] = cache.sort((a, b) => {
-                return (a.date < b.date) ? -1 : 1;
-            });
+            let thread_id = firstMessage.thread_id;
+            // let cache = this.threads[thread.id] || [];
+            let cachedData = this.threads.getThread(thread_id).messages();
+            cachedData.update(thread);
 
             this.__cache_write();
             this.notify('threads');
@@ -330,7 +315,8 @@ var Plugin = GObject.registerClass({
 
             // Otherwise this is single thread or new message
             } else {
-                this._handleThread(messages);
+                let t = new Thread(messages[0].thread_id, messages);
+                this._handleThread(t);
             }
         } catch (e) {
             logError(e);
@@ -344,14 +330,16 @@ var Plugin = GObject.registerClass({
      * @param {Number} numberToGet - Amount of messages to fetch from database
      * @param {Number} beforeTimestamp - Starting point for fetching messages
      */
-    requestConversation(thread_id) {
+    requestConversation(thread_id, numberToRequest = 15, rangeStartTimestamp = null) {
 
 
         debug("Requesting conversation: " + thread_id);
         this.device.sendPacket({
             type: 'kdeconnect.sms.request_conversation',
             body: {
-                threadID: thread_id
+                threadID: thread_id,
+                numberToRequest,
+                rangeStartTimestamp
             }
         });
     }
@@ -360,8 +348,12 @@ var Plugin = GObject.registerClass({
      * Request a list of the last message in each unarchived thread.
      */
     requestConversations() {
+        debug("Fetching threads newer than: " + this.threads.newestCachedTime);
         this.device.sendPacket({
-            type: 'kdeconnect.sms.request_conversations'
+            type: 'kdeconnect.sms.request_conversations',
+            body: {
+                rangeStartTimestamp: this.threads.newestCachedTime
+            }
         });
     }
 
