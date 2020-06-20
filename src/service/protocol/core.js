@@ -295,7 +295,7 @@ var Channel = GObject.registerClass({
                     // Malformed packets aren't fatal
                     try {
                         let packet = new Packet(data);
-                        debug(packet, device.name);
+                        // debug(packet, device.name);
                         device.receivePacket(packet);
                     } catch (e) {
                         debug(e, device.name);
@@ -341,7 +341,7 @@ var Channel = GObject.registerClass({
                         );
                     });
 
-                    debug(next, this.identity.body.deviceName);
+                    // debug(next, this.identity.body.deviceName);
                 }
 
                 this.__lock = false;

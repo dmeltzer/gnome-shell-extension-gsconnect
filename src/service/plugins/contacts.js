@@ -161,7 +161,7 @@ var Plugin = GObject.registerClass({
      * Decode a string encoded as "UTF-8" and return a regular string
      *
      * See: https://github.com/kvz/locutus/blob/master/src/php/xml/utf8_decode.js
-     * 
+     *
      * @param {string} input - The UTF-8 string
      * @return {string} - The decoded string
      */
@@ -333,7 +333,7 @@ var Plugin = GObject.registerClass({
             return undefined;
         }
     }
-    
+
     async parseVCard(uid, vcard_data) {
         try {
             let contact = {
@@ -343,36 +343,36 @@ var Plugin = GObject.registerClass({
                 origin: 'device',
                 timestamp: 0
             };
-            
+
             let evcard = EBookContacts.VCard.new_from_string(vcard_data);
             let evattrs = evcard.get_attributes();
-            
+
             for (let i = 0, len = evattrs.length; i < len; i++) {
                 let attr = evattrs[i];
                 let data, number;
-                
+
                 switch (attr.get_name().toLowerCase()) {
                     case 'fn':
                         contact.name = attr.get_value();
                         break;
-                        
+
                     case 'tel':
                         number = {value: attr.get_value(), type: 'unknown'};
-                        
+
                         if (attr.has_type('CELL'))
                             number.type = 'cell';
                         else if (attr.has_type('HOME'))
                             number.type = 'home';
                         else if (attr.has_type('WORK'))
                             number.type = 'work';
-                        
+
                         contact.numbers.push (number);
                         break;
-                        
+
                     case 'x-kdeconnect-timestamp':
                         contact.timestamp = parseInt(attr.get_value());
                         break;
-                        
+
                     case 'photo':
                         data = GLib.base64_decode(attr.get_value());
                         contact.avatar = await this._store.storeAvatar(data);
@@ -395,7 +395,7 @@ var Plugin = GObject.registerClass({
             // Parse each vCard and add the contact
             for (let [uid, vcard] of Object.entries(packet.body)) {
                 let contact;
-                
+
                 if (EBookContacts) {
                     contact = await this.parseVCard(uid, vcard);
                 } else {
@@ -412,18 +412,18 @@ var Plugin = GObject.registerClass({
     }
 
     requestUids() {
-        this.device.sendPacket({
-            type: 'kdeconnect.contacts.request_all_uids_timestamps'
-        });
+        // this.device.sendPacket({
+        //     type: 'kdeconnect.contacts.request_all_uids_timestamps'
+        // });
     }
 
     requestVCards(uids) {
-        this.device.sendPacket({
-            type: 'kdeconnect.contacts.request_vcards_by_uid',
-            body: {
-                uids: uids
-            }
-        });
+        // this.device.sendPacket({
+        //     type: 'kdeconnect.contacts.request_vcards_by_uid',
+        //     body: {
+        //         uids: uids
+        //     }
+        // });
     }
 
     destroy() {

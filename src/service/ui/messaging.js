@@ -283,6 +283,7 @@ const ThreadRow = GObject.registerClass({
         let bodyLabel = message.body.split(/\r|\n/)[0];
         bodyLabel = GLib.markup_escape_text(bodyLabel, -1);
 
+
         // Ignore the 'read' flag if it's an outgoing message
         if (message.type === Sms.MessageBox.SENT) {
             // TRANSLATORS: An outgoing message body in a conversation summary
@@ -386,6 +387,8 @@ const ConversationWidget = GObject.registerClass({
             this._holdPosition.bind(this)
         );
 
+        this.plugin.threads.connect("messages-added", this._updateThreadMessages.bind(this));
+
         // Message List
         this.list.set_header_func(this._headerMessages);
         this.list.set_sort_func(this._sortMessages);
@@ -459,9 +462,16 @@ const ConversationWidget = GObject.registerClass({
         return this._thread_id;
     }
 
+    get fetchMessageTimestamp() {
+        if (this._fetchTimestamp === undefined)
+            this._fetchTimestamp = null;
+
+        return this._fetchTimestamp
+    }
+
     set thread_id(thread_id) {
-        let thread = this.plugin.threads[thread_id];
-        let message = (thread) ? thread[0] : null;
+        let thread = this.plugin.threads.getThread(thread_id);
+        let message = (thread) ? thread.firstMessage : null;
 
         if (message && this.addresses.length === 0) {
             this.addresses = message.addresses;
@@ -489,7 +499,14 @@ const ConversationWidget = GObject.registerClass({
     _onEdgeReached(scrolled_window, pos) {
         // Try to load more messages
         if (pos === Gtk.PositionType.TOP) {
-            this.logPrevious();
+            debug("Top reached, filling backlog");
+
+            let oldestCurrentMessage = this.list.get_children()[0].message;
+            debug(oldestCurrentMessage);
+            this._fetchTimestamp = oldestCurrentMessage.date;
+            this.plugin.threads.getMessagesForThread(oldestCurrentMessage.thread_id, 25, oldestCurrentMessage.date);
+
+            // this.logPrevious();
 
         // Release any hold to resume auto-scrolling
         } else if (pos === Gtk.PositionType.BOTTOM) {
@@ -540,7 +557,7 @@ const ConversationWidget = GObject.registerClass({
 
         // If the scrolled window hasn't been filled yet, load another message
         if (upper <= pageSize) {
-            this.logPrevious();
+            // this.logPrevious();
             this.scrolled.get_child().check_resize();
 
         // We've been asked to hold the position, so we'll reset the adjustment
@@ -615,7 +632,14 @@ const ConversationWidget = GObject.registerClass({
         return row;
     }
 
+    _updateThreadMessages(store, thread) {
+        if (thread !== null) {
+            this.__messages = this.__messages.concat(thread.messages(25, this.fetchMessageTimestamp));
+            this.logPrevious();
+        }
+    }
     _populateMessages() {
+
         this.__first = null;
         this.__last = null;
         this.__pos = 0;
@@ -623,12 +647,13 @@ const ConversationWidget = GObject.registerClass({
 
         // Try and find a thread_id for this number
         if (this.thread_id === null && this.addresses.length) {
-            this._thread_id = this.plugin.getThreadIdForAddresses(this.addresses);
+            this.thread_id = this.plugin.getThreadIdForAddresses(this.addresses);
         }
 
         // Make a copy of the thread and fill the window with messages
-        if (this.plugin.threads[this.thread_id]) {
-            this.__messages = this.plugin.threads[this.thread_id].slice(0);
+        debug(`Fetching thread ${this.thread_id}`);
+        if (this.plugin.threads.hasThread(this.thread_id)) {
+            this.__messages = this.__messages.concat(this.plugin.threads.getMessagesForThread(this.thread_id, 25));
             this.logPrevious();
         }
     }
@@ -749,8 +774,8 @@ const ConversationWidget = GObject.registerClass({
      */
     logPrevious() {
         try {
+            // debug(this.__messages);
             let message = this.__messages.pop();
-
             if (!message) return;
 
             // TODO: Unsupported MessageBox
@@ -764,6 +789,10 @@ const ConversationWidget = GObject.registerClass({
             let row = this._createMessageRow(message);
             this.list.prepend(row);
             this.list.invalidate_headers();
+
+            // Recurse
+            if (this.__messages.length > 0)
+                this.logPrevious();
         } catch (e) {
             debug(e);
         }
@@ -892,13 +921,10 @@ var Window = GObject.registerClass({
 
         // Create a conversation widget if there isn't one
         let conversation = this.stack.get_child_by_name(thread_id);
-        let thread = this.plugin.threads[thread_id];
-        if (thread.length === 1) {
-            // Fetch information for thread.
-            this.plugin.requestConversation(thread_id);
-        }
+        let messages = this.plugin.threads.getMessagesForThread(thread_id);
+        debug ("Hanging out here");
         if (conversation === null) {
-            if (!thread) {
+            if (!messages) {
                 debug(`Thread ID ${thread_id} not found`);
                 return;
             }
@@ -913,7 +939,7 @@ var Window = GObject.registerClass({
         }
 
         // Figure out whether this is a multi-recipient thread
-        this._setHeaderBar(thread[0].addresses);
+        this._setHeaderBar(messages[0].addresses);
 
         // Select the conversation and entry active
         this.stack.visible_child = conversation;
@@ -989,7 +1015,7 @@ var Window = GObject.registerClass({
             let message = thread.firstMessage;
             // Skip messages without a body (eg. MMS messages without text)
             if (message.body) {
-                messages[thread.id] = thread.messages()[thread.length - 1];
+                messages[thread.id] = thread.firstMessage;
             }
         }
 
