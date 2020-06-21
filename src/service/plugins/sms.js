@@ -5,7 +5,9 @@ const GLib = imports.gi.GLib;
 const GObject = imports.gi.GObject;
 
 const PluginsBase = imports.service.plugins.base;
-const Messaging = imports.service.ui.messaging;
+const {ConversationChooser} = imports.service.ui.messages.conversationchooser;
+const {MessagingWindow} = imports.service.ui.messages.window;
+
 const TelephonyUI = imports.service.ui.telephony;
 const URI = imports.utils.uri;
 
@@ -148,6 +150,7 @@ var Plugin = GObject.registerClass({
             debug('Thread Cache undefined, trying to fix');
             this._threads = new SMS.MessageStore();
         }
+        // debug(this._threads);
         return this._threads;
     }
 
@@ -160,7 +163,7 @@ var Plugin = GObject.registerClass({
         }
 
         if (this._window === undefined) {
-            this._window = new Messaging.Window({
+            this._window = new MessagingWindow({
                 application: this.service,
                 device: this.device,
                 plugin: this
@@ -187,6 +190,8 @@ var Plugin = GObject.registerClass({
     cacheLoaded() {
         // Recreate it as a full on object.
         // this._threads = SMS.MessageStore.fromJSON(this._threads);
+        new SMS.Thread();
+        debug(SMS.Thread.$gtype);
         this._threads = new SMS.MessageStore(this._threads);
         this.threads.connect('request-messages', this._onConversationRequested.bind(this));
         this.notify('threads');
@@ -221,6 +226,7 @@ var Plugin = GObject.registerClass({
             let thread = this.threads.getThread(message.thread_id);
             if (thread && message.read === MessageStatus.READ) {
                 for (let msg of thread) {
+                    debug(msg);
                     msg.read = MessageStatus.read;
                 }
                 // Can we implement foreach on the thread?
@@ -334,6 +340,7 @@ var Plugin = GObject.registerClass({
      * @param {Number} beforeTimestamp - Starting point for fetching messages
      */
     requestConversation(thread_id, numberToRequest = 25, rangeStartTimestamp = null) {
+        debug('Requested to fetch');
         this.device.sendPacket({
             type: 'kdeconnect.sms.request_conversation',
             body: {
@@ -428,7 +435,7 @@ var Plugin = GObject.registerClass({
 
         // If there are active threads, show the chooser dialog
         } else if (Object.values(this.threads).length > 0) {
-            let window = new Messaging.ConversationChooser({
+            let window = new ConversationChooser({
                 application: this.service,
                 device: this.device,
                 message: url,
@@ -534,5 +541,128 @@ var Plugin = GObject.registerClass({
 
         super.destroy();
     }
+
 });
 
+// Helper functions
+
+/**
+ * Return a human-readable timestamp.
+ *
+ * @param {Number} time - Milliseconds since the epoch (local time)
+ * @return {String} - A timestamp similar to what Android Messages uses
+ */
+var getTime = function (time) {
+    let date = GLib.DateTime.new_from_unix_local(time / 1000);
+    let now = GLib.DateTime.new_now_local();
+    let diff = now.difference(date);
+
+    switch (true) {
+        // Super recent
+        case (diff < GLib.TIME_SPAN_MINUTE):
+            // TRANSLATORS: Less than a minute ago
+            return _('Just now');
+
+        // Under an hour
+        case (diff < GLib.TIME_SPAN_HOUR):
+            // TRANSLATORS: Time duration in minutes (eg. 15 minutes)
+            return ngettext(
+                '%d minute',
+                '%d minutes',
+                (diff / GLib.TIME_SPAN_MINUTE)
+            ).format(diff / GLib.TIME_SPAN_MINUTE);
+
+        // Yesterday, but less than 24 hours ago
+        case (diff < GLib.TIME_SPAN_DAY && (now.get_day_of_month() !== date.get_day_of_month())):
+            // TRANSLATORS: Yesterday, but less than 24 hours (eg. Yesterday · 11:29 PM)
+            return _('Yesterday・%s').format(date.format('%l:%M %p'));
+
+        // Less than a day ago
+        case (diff < GLib.TIME_SPAN_DAY):
+            return date.format('%l:%M %p');
+
+        // Less than a week ago
+        case (diff < (GLib.TIME_SPAN_DAY * 7)):
+            return date.format('%A・%l:%M %p');
+
+        // Sometime this year
+        case (date.get_year() === now.get_year()):
+            return date.format('%b %e');
+
+        // Earlier than that
+        default:
+            return date.format('%b %e %Y');
+    }
+};
+
+var getShortTime = function (time) {
+    let date = GLib.DateTime.new_from_unix_local(time / 1000);
+    let diff = GLib.DateTime.new_now_local().difference(date);
+
+    switch (true) {
+        case (diff < GLib.TIME_SPAN_MINUTE):
+            // TRANSLATORS: Less than a minute ago
+            return _('Just now');
+
+        case (diff < GLib.TIME_SPAN_HOUR):
+            // TRANSLATORS: Time duration in minutes (eg. 15 minutes)
+            return ngettext(
+                '%d minute',
+                '%d minutes',
+                (diff / GLib.TIME_SPAN_MINUTE)
+            ).format(diff / GLib.TIME_SPAN_MINUTE);
+
+        // Less than a day ago
+        case (diff < GLib.TIME_SPAN_DAY):
+            return date.format('%l:%M %p');
+
+        // Less than a week ago
+        case (diff < (GLib.TIME_SPAN_DAY * 7)):
+            return date.format('%a');
+
+        // Sometime this year
+        case (date.get_year() === GLib.DateTime.new_now_local().get_year()):
+            return date.format('%b %e');
+
+        // Earlier than that
+        default:
+            return date.format('%b %e %Y');
+    }
+};
+
+// Used for tooltips to display time and date of message.
+var getDetailedTime = function (time) {
+    let date = GLib.DateTime.new_from_unix_local(time / 1000);
+
+    return date.format('%c');
+};
+
+var getContactsForAddresses = function(device, addresses) {
+    let contacts = {};
+
+    for (let i = 0, len = addresses.length; i < len; i++) {
+        let address = addresses[i].address;
+
+        contacts[address] = device.contacts.query({
+            number: address
+        });
+    }
+};
+
+var setAvatarVisible = function (row, visible) {
+    let incoming = (row.message.type === MessageBox.INBOX);
+
+    // Adjust the margins
+    if (visible) {
+        row.grid.margin_start = incoming ? 6 : 56;
+        row.grid.margin_bottom = 6;
+    } else {
+        row.grid.margin_start = incoming ? 44 : 56;
+        row.grid.margin_bottom = 0;
+    }
+
+    // Show hide the avatar
+    if (incoming) {
+        row.avatar.visible = visible;
+    }
+};

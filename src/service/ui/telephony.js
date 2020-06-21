@@ -5,7 +5,8 @@ const GObject = imports.gi.GObject;
 const Gtk = imports.gi.Gtk;
 
 const Contacts = imports.service.ui.contacts;
-const Messaging = imports.service.ui.messaging;
+const Messaging = imports.service.ui.messages.messagelabel;
+const {MessagingWindow} = imports.service.ui.messages.window;
 
 
 var LegacyMessagingDialog = GObject.registerClass({
@@ -45,7 +46,7 @@ var LegacyMessagingDialog = GObject.registerClass({
 
         // Dup some functions
         this.headerbar = this.get_titlebar();
-        this._setHeaderBar = Messaging.Window.prototype._setHeaderBar;
+        this._setHeaderBar = MessagingWindow.prototype._setHeaderBar;
 
         // Info bar
         this.device.bind_property(
