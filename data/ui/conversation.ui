@@ -12,7 +12,7 @@
         <property name="hexpand">True</property>
         <property name="vexpand">True</property>
         <property name="hscrollbar_policy">never</property>
-        <!-- <signal name="edge-reached" handler="_onEdgeReached" swapped="no"/> -->
+        <signal name="edge-reached" handler="_onEdgeReached" swapped="no"/>
         <child>
           <object class="GtkViewport">
             <property name="visible">True</property>

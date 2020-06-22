@@ -198,6 +198,16 @@ var ConversationWidget = GObject.registerClass({
             imports.system.gc();
         });
     }
+    _onEdgeReached(scrolled_window, pos) {
+        // Try to load more messages
+        if (pos === Gtk.PositionType.TOP) {
+            this.thread.requestMoreMessagesFromDevice();
+
+            // Release any hold to resume auto-scrolling
+        } else if (pos === Gtk.PositionType.BOTTOM) {
+            this._releasePosition();
+        }
+    }
 
     _onEntryChanged(entry) {
         entry.secondary_icon_sensitive = (entry.text.length);
@@ -220,19 +230,26 @@ var ConversationWidget = GObject.registerClass({
         // Don't send empty texts
         if (!this.entry.text.trim()) return;
 
-        // Send the message
+        // // Send the message
         this.plugin.sendMessage(this.addresses, entry.text);
+        // this.thread.addMessages([
+        //     {
+        //         addresses: this.addresses,
+        //         body: entry.text,
+        //         date: GLib.DateTime.new_now_local().toUnix() * 1000,
+        //         thread_id
+        //     }
+        // ])
+        // // Log the message as pending
+        // let message = new MessageLabel({
+        //     body: this.entry.text,
+        //     date: Date.now(),
+        //     type: Sms.MessageBox.SENT
+        // });
+        // this.pending_box.add(message);
+        // this.notify('has-pending');
 
-        // Log the message as pending
-        let message = new MessageLabel({
-            body: this.entry.text,
-            date: Date.now(),
-            type: Sms.MessageBox.SENT
-        });
-        this.pending_box.add(message);
-        this.notify('has-pending');
-
-        // Clear the entry
+        // // Clear the entry
         this.entry.text = '';
     }
 
@@ -328,26 +345,7 @@ var ConversationWidget = GObject.registerClass({
             this.logPrevious();
         }
     }
-    _populateMessages() {
-        // // TODO Is this handled by onEdgeReached now?
-        // this.__first = null;
-        // this.__last = null;
-        // this.__pos = 0;
-        // this.__messages = [];
-        // // this.list.clear();
 
-        // // Try and find a thread_id for this number
-        // if (this.thread_id === null && this.addresses.length) {
-        //     this.thread_id = this.plugin.getThreadIdForAddresses(this.addresses);
-        // }
-
-        // // Make a copy of the thread and fill the window with messages
-        // debug(`Fetching thread ${this.thread_id}`);
-        // if (this.plugin.threads.hasThread(this.thread_id)) {
-        //     this.__messages = this.__messages.concat(this.plugin.threads.getMessagesForThread(this.thread_id, 25));
-        //     this.logPrevious();
-        // }
-    }
 
     _headerMessages(row, before) {
         // Skip pending
@@ -423,70 +421,6 @@ var ConversationWidget = GObject.registerClass({
                 this._vadj.thaw_notify();
             });
         }
-    }
-
-    // _sortMessages(row1, row2) {
-
-    //     // If we only have one message
-    //     if (!row1.message || !row2.message)
-    //         return true;
-    //     return (row1.message.date > row2.message.date) ? 1 : -1;
-    // }
-
-    /**
-     * Log the next message in the conversation.
-     *
-     * @param {object} message - A message object
-     */
-    logNext(message) {
-        // try {
-        //     // TODO: Unsupported MessageBox
-        //     if (message.type !== Sms.MessageBox.INBOX &&
-        //         message.type !== Sms.MessageBox.SENT)
-        //         return;
-
-        //     // Append the message
-        //     let row = this._createMessageRow(message);
-        //     this.list.add(row);
-        //     this.list.invalidate_headers();
-
-        //     // Remove the first pending message
-        //     if (this.has_pending && message.type === Sms.MessageBox.SENT) {
-        //         this.pending_box.get_children()[0].destroy();
-        //         this.notify('has-pending');
-        //     }
-        // } catch (e) {
-        //     debug(e);
-        // }
-    }
-
-    /**
-     * Log the previous message in the thread
-     */
-    logPrevious() {
-        // try {
-        //     // debug(this.__messages);
-        //     let message = this.__messages.pop();
-        //     if (!message) return;
-
-        //     // TODO: Unsupported MessageBox
-        //     if (message.type !== Sms.MessageBox.INBOX &&
-        //         message.type !== Sms.MessageBox.SENT &&
-        //         message.type !== Sms.MessageBox.ALL) {
-        //         throw TypeError(`invalid message box "${message.type}"`);
-        //     }
-
-        //     // Prepend the message
-        //     let row = this._createMessageRow(message);
-        //     this.list.prepend(row);
-        //     this.list.invalidate_headers();
-
-        //     // Recurse
-        //     if (this.__messages.length > 0)
-        //         this.logPrevious();
-        // } catch (e) {
-        //     debug(e);
-        // }
     }
 
     /**

@@ -226,6 +226,7 @@ var Thread = GObject.registerClass({
         this._hasMoreMessages = true;
         this._oldestCacheTimestamp = -1;
         this._newestCacheTimestamp = -1;
+        this._waitingForMoreMessages = false;
         this._messages = [];
         this.addMessages(params.messages);
     }
@@ -304,11 +305,11 @@ var Thread = GObject.registerClass({
     update(newThreadData) {
         // If the earliest date fetched matches the earliest date in our cache
         // there is no more to fetch.
-        // if (newThreadData[0].date === this.sortedTimeStamps[0]) {
-        //     debug('No more messages in thread.');
-        //     this._hasMoreMessages = false;
-        //     return false;
-        // }
+        if (newThreadData[0].date === this._messages[0].date) {
+            debug('No more messages in thread.');
+            this._hasMoreMessages = false;
+            return false;
+        }
         // The initial message returned when we fetch conversations doesn't
         // Contain a helpful messagetype--it's always 0 regardless of who sent.
         // If we have a thread with only this message, lets delete it.
@@ -316,6 +317,7 @@ var Thread = GObject.registerClass({
             this._messages = [];
             this.model_items_changed(0, 1, 0);
         }
+        this._waitingForMoreMessages = false;
         let messagesToAdd = [];
         for (let i = 0, len = newThreadData.length; i < len; i++) {
 
@@ -340,14 +342,16 @@ var Thread = GObject.registerClass({
     }
 
     addMessages(messages) {
-        let initialLength = this._messages.length;
         this._messages = this._messages.concat(messages);
         // Todo: If an update is called this is run for each message, we should delay it.
         if (this._messages.length > 0)
             this.setCacheTimestampExtremes();
         this._messages.sort((a, b) => a.date - b.date);
-
-        this.model_items_changed(initialLength, 0, messages.length);
+        // This will fail if we are adding messages that interweave with messages that exist
+        // but I don't think this is a valid scenario.
+        let earlestDate = messages.reduce((min,m) => m.date < min ? m.date : min, messages[0].date);
+        let addedPosition = this._messages.findIndex(m => m.date === earlestDate);
+        this.model_items_changed(addedPosition, 0, messages.length);
     }
 
     setCacheTimestampExtremes() {
@@ -375,29 +379,26 @@ var Thread = GObject.registerClass({
     }
 
     requestMoreMessagesFromDevice() {
-        let fetchDate = this.firstMessage.date - 1; // To avoid fetching this message again.
+        // If we're already waiting, lets not spam requests
+        if (this._waitingForMoreMessages)
+            return;
+        let fetchDate = this.firstMessage.date - 100; // To avoid fetching this message again.
         debug(fetchDate);
+        this._waitingForMoreMessages = true;
         this.emit('request-messages',
             this.id,
             DEFAULTFETCHNUMBER,
-            fetchDate - 1
+            fetchDate
         );
     }
     vfunc_get_item(position) {
-        // preemptively load more.
-        if (position > this.get_n_items()) {
-            this.requestMoreMessagesFromDevice();
+        if (position >= this.get_n_items()) {
             return null;
         }
-        if (position >= this.get_n_items())
-            return null;
-
         let ret = this._messages[position];
-
         if (ret === undefined) {
             return null;
         }
-
         ret = Object.assign(new GObject.Object(), ret);
         return ret;
     }

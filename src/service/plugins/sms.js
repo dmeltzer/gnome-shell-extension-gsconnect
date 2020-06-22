@@ -147,10 +147,8 @@ var Plugin = GObject.registerClass({
 
     get threads() {
         if (this._threads === undefined) {
-            debug('Thread Cache undefined, trying to fix');
             this._threads = new SMS.MessageStore();
         }
-        // debug(this._threads);
         return this._threads;
     }
 
@@ -188,10 +186,6 @@ var Plugin = GObject.registerClass({
     }
 
     cacheLoaded() {
-        // Recreate it as a full on object.
-        // this._threads = SMS.MessageStore.fromJSON(this._threads);
-        new SMS.Thread();
-        debug(SMS.Thread.$gtype);
         this._threads = new SMS.MessageStore(this._threads);
         this.threads.connect('request-messages', this._onConversationRequested.bind(this));
         this.notify('threads');
@@ -216,22 +210,15 @@ var Plugin = GObject.registerClass({
             }
         }
 
-
-        // Request each new or newer thread
-        // Run as two separate loops so that conversations populate before message fetching.
         for (let i = 0, len = messages.length; i < len; i++) {
             let message = messages[i];
 
             // Handle existing threads
             let thread = this.threads.getThread(message.thread_id);
             if (thread && message.read === MessageStatus.READ) {
-                // // debug(thread);
                 for (let msg of thread) {
-                    // debug(msg);
                     msg.read = MessageStatus.read;
                 }
-                // Can we implement foreach on the thread?
-                // thread.forEach(msg => msg.read = MessageStatus.READ);
                 this._handleThread(thread);
             } else {
                 thread = this.threads.createThread(message);
@@ -276,7 +263,6 @@ var Plugin = GObject.registerClass({
             let firstMessage = thread;
             if (thread.length > 1)
                 firstMessage = thread[0];
-            // let firstMessage = thread[0];
             // If there are no addresses this will cause major problems...
             if (!firstMessage.addresses || !firstMessage.addresses[0]) return;
 
@@ -326,7 +312,6 @@ var Plugin = GObject.registerClass({
 
             // Otherwise this is single thread or new message
             } else {
-                // let t = this.threads.fetchOrCreateThread(messages);
                 this._handleThread(messages);
             }
         } catch (e) {
