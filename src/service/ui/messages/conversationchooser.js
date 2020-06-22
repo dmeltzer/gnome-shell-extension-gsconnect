@@ -71,6 +71,7 @@ var ConversationChooser = GObject.registerClass({
         this.thread_list = new Gtk.ListBox({
             activate_on_single_click: false
         });
+        // this.thread_list.bind_model(this)
         this.thread_list.set_sort_func(MessagingWindow.prototype._sortThreads);
         this.thread_list.connect('row-activated', this._select.bind(this));
         scrolledWindow.add(this.thread_list);

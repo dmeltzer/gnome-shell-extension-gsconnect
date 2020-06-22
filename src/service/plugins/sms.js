@@ -225,6 +225,7 @@ var Plugin = GObject.registerClass({
             // Handle existing threads
             let thread = this.threads.getThread(message.thread_id);
             if (thread && message.read === MessageStatus.READ) {
+                debug(thread);
                 for (let msg of thread) {
                     debug(msg);
                     msg.read = MessageStatus.read;
@@ -271,7 +272,10 @@ var Plugin = GObject.registerClass({
         try {
             if (thread.length < 1)
                 return; // Something wrong with this thread.
-            let firstMessage = thread[0];
+            let firstMessage = thread;
+            if (thread.length > 1)
+                firstMessage = thread[0];
+            // let firstMessage = thread[0];
             // If there are no addresses this will cause major problems...
             if (!firstMessage.addresses || !firstMessage.addresses[0]) return;
 
@@ -329,6 +333,7 @@ var Plugin = GObject.registerClass({
         }
     }
     _onConversationRequested(store, thread_id, numberToRequest, rangeStartTimestamp) {
+        debug("Requesting");
         this.requestConversation( thread_id, numberToRequest, rangeStartTimestamp);
     }
 
@@ -340,13 +345,13 @@ var Plugin = GObject.registerClass({
      * @param {Number} beforeTimestamp - Starting point for fetching messages
      */
     requestConversation(thread_id, numberToRequest = 25, rangeStartTimestamp = null) {
-        debug('Requested to fetch');
+        debug(`Requested to fetch starting at ${rangeStartTimestamp}`);
         this.device.sendPacket({
             type: 'kdeconnect.sms.request_conversation',
             body: {
                 threadID: thread_id,
                 numberToRequest,
-                rangeStartTimestamp: (parseInt(rangeStartTimestamp))
+                rangeStartTimestamp
             }
         });
     }

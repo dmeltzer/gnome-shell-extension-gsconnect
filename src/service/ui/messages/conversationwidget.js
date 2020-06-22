@@ -90,14 +90,14 @@ var ConversationWidget = GObject.registerClass({
             this._holdPosition.bind(this)
         );
 
-        this.plugin.threads.connect('messages-added', this._updateThreadMessages.bind(this));
+        // this.plugin.threads.connect('messages-added', this._updateThreadMessages.bind(this));
 
         // Message List
         // this.list.set_header_func(this._headerMessages);
         // this.list.set_sort_func(this._sortMessages);
         this.__messages = [];
 
-        this._populateMessages();
+        // this._populateMessages();
 
         // Cleanup on ::destroy
         this.connect('destroy', this._onDestroy);
@@ -201,22 +201,6 @@ var ConversationWidget = GObject.registerClass({
         });
     }
 
-    _onEdgeReached(scrolled_window, pos) {
-        // // Try to load more messages
-        // if (pos === Gtk.PositionType.TOP) {
-
-        //     let oldestCurrentMessage = this.list.get_children()[0].message;
-        //     this._fetchTimestamp = oldestCurrentMessage.date;
-        //     this.__messages.concat(this.plugin.threads.getMessagesForThread(oldestCurrentMessage.thread_id, 25, oldestCurrentMessage.date));
-
-        //     this.logPrevious();
-
-        //     // Release any hold to resume auto-scrolling
-        // } else if (pos === Gtk.PositionType.BOTTOM) {
-        //     this._releasePosition();
-        // }
-    }
-
     _onEntryChanged(entry) {
         entry.secondary_icon_sensitive = (entry.text.length);
     }
@@ -255,30 +239,34 @@ var ConversationWidget = GObject.registerClass({
     }
 
     _onSizeAllocate(listbox, allocation) {
-        // let upper = this._vadj.get_upper();
-        // let pageSize = this._vadj.get_page_size();
+        let upper = this._vadj.get_upper();
+        let pageSize = this._vadj.get_page_size();
 
-        // // If the scrolled window hasn't been filled yet, load another message
-        // if (upper <= pageSize) {
-        //     // this.logPrevious();
-        //     this.scrolled.get_child().check_resize();
+        // If the scrolled window hasn't been filled yet, load another message
+        if (upper <= pageSize) {
+            // this.logPrevious();
 
-        //     // We've been asked to hold the position, so we'll reset the adjustment
-        //     // value and update the hold position
-        // } else if (this.__pos) {
-        //     this._vadj.set_value(upper - this.__pos);
+            this.scrolled.get_child().check_resize();
 
-        //     // Otherwise we probably appended a message and should scroll to it
-        // } else {
-        //     this._scrollPosition(Gtk.PositionType.BOTTOM);
-        // }
+            // We've been asked to hold the position, so we'll reset the adjustment
+            // value and update the hold position
+        } else if (this.__pos) {
+            this._vadj.set_value(upper - this.__pos);
+
+            // Otherwise we probably appended a message and should scroll to it
+        } else {
+            this._scrollPosition(Gtk.PositionType.BOTTOM);
+        }
     }
 
     /**
      * Messages
      */
     _createMessageRow(message) {
-        debug(message);
+        if(message === null) {
+            return null;
+        }
+        // debug(message);
         let incoming = (message.type === Sms.MessageBox.INBOX);
 
         let row = new Gtk.ListBoxRow({
@@ -439,13 +427,13 @@ var ConversationWidget = GObject.registerClass({
         }
     }
 
-    _sortMessages(row1, row2) {
+    // _sortMessages(row1, row2) {
 
-        // If we only have one message
-        if (!row1.message || !row2.message)
-            return true;
-        return (row1.message.date > row2.message.date) ? 1 : -1;
-    }
+    //     // If we only have one message
+    //     if (!row1.message || !row2.message)
+    //         return true;
+    //     return (row1.message.date > row2.message.date) ? 1 : -1;
+    // }
 
     /**
      * Log the next message in the conversation.
@@ -453,54 +441,54 @@ var ConversationWidget = GObject.registerClass({
      * @param {object} message - A message object
      */
     logNext(message) {
-        try {
-            // TODO: Unsupported MessageBox
-            if (message.type !== Sms.MessageBox.INBOX &&
-                message.type !== Sms.MessageBox.SENT)
-                return;
+        // try {
+        //     // TODO: Unsupported MessageBox
+        //     if (message.type !== Sms.MessageBox.INBOX &&
+        //         message.type !== Sms.MessageBox.SENT)
+        //         return;
 
-            // Append the message
-            let row = this._createMessageRow(message);
-            this.list.add(row);
-            this.list.invalidate_headers();
+        //     // Append the message
+        //     let row = this._createMessageRow(message);
+        //     this.list.add(row);
+        //     this.list.invalidate_headers();
 
-            // Remove the first pending message
-            if (this.has_pending && message.type === Sms.MessageBox.SENT) {
-                this.pending_box.get_children()[0].destroy();
-                this.notify('has-pending');
-            }
-        } catch (e) {
-            debug(e);
-        }
+        //     // Remove the first pending message
+        //     if (this.has_pending && message.type === Sms.MessageBox.SENT) {
+        //         this.pending_box.get_children()[0].destroy();
+        //         this.notify('has-pending');
+        //     }
+        // } catch (e) {
+        //     debug(e);
+        // }
     }
 
     /**
      * Log the previous message in the thread
      */
     logPrevious() {
-        try {
-            // debug(this.__messages);
-            let message = this.__messages.pop();
-            if (!message) return;
+        // try {
+        //     // debug(this.__messages);
+        //     let message = this.__messages.pop();
+        //     if (!message) return;
 
-            // TODO: Unsupported MessageBox
-            if (message.type !== Sms.MessageBox.INBOX &&
-                message.type !== Sms.MessageBox.SENT &&
-                message.type !== Sms.MessageBox.ALL) {
-                throw TypeError(`invalid message box "${message.type}"`);
-            }
+        //     // TODO: Unsupported MessageBox
+        //     if (message.type !== Sms.MessageBox.INBOX &&
+        //         message.type !== Sms.MessageBox.SENT &&
+        //         message.type !== Sms.MessageBox.ALL) {
+        //         throw TypeError(`invalid message box "${message.type}"`);
+        //     }
 
-            // Prepend the message
-            let row = this._createMessageRow(message);
-            this.list.prepend(row);
-            this.list.invalidate_headers();
+        //     // Prepend the message
+        //     let row = this._createMessageRow(message);
+        //     this.list.prepend(row);
+        //     this.list.invalidate_headers();
 
-            // Recurse
-            if (this.__messages.length > 0)
-                this.logPrevious();
-        } catch (e) {
-            debug(e);
-        }
+        //     // Recurse
+        //     if (this.__messages.length > 0)
+        //         this.logPrevious();
+        // } catch (e) {
+        //     debug(e);
+        // }
     }
 
     /**
