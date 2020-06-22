@@ -51,7 +51,6 @@ var MessageStore = GObject.registerClass({
     }
 
     initializeThreads(threads) {
-        debug("here");
         this._threads = {};
         let cnt = 0;
         for (let thread_id of Object.keys(threads) ) {
@@ -63,11 +62,7 @@ var MessageStore = GObject.registerClass({
     }
 
     _forwardSignal(context, thread_id, number, date) {
-        debug("Forwarding signal");
-        // debug(this);
-        debug(`Thread ID ${thread_id} number ${number} date ${date}`);
-        this.emit('request-messages', thread_id, number, date)
-        debug("Forwarded")
+        this.emit('request-messages', thread_id, number, date);
     }
 
     addExistingThread(thread) {
@@ -114,18 +109,9 @@ var MessageStore = GObject.registerClass({
                 if (messages.length > 0) {
                     beforeTimeStamp = messages[0].date;
                 }
-debug(thread.get_n_items());
                 if (thread.get_n_items() < DEFAULTFETCHNUMBER) {
-                    debug("Requesting more from db");
                     thread.requestMoreMessagesFromDevice();
                 }
-
-                // // Request more from device.
-                // this.emit('request-messages',
-                //     thread_id,
-                //     numberToRequest,
-                //     beforeTimeStamp`
-                // );
             }
         }
         // Regardless, return what we have
@@ -240,10 +226,8 @@ var Thread = GObject.registerClass({
         this._hasMoreMessages = true;
         this._oldestCacheTimestamp = -1;
         this._newestCacheTimestamp = -1;
-        // { timestamp: { message}};
         this._messages = [];
         this.addMessages(params.messages);
-
     }
 
     toJSON() {
@@ -252,7 +236,6 @@ var Thread = GObject.registerClass({
             hasMoreMessages: this._hasMoreMessages,
             oldestCacheTimestamp: this._oldestCacheTimestamp,
             newestCacheTimestamp: this._newestCacheTimestamp,
-            // messages: this._jsonify(this._messages)
             messages: this._messages
         };
         return ret;
@@ -284,14 +267,10 @@ var Thread = GObject.registerClass({
         return this._messages[0];
     }
 
-    _jsonify(messages) {
-        let ret = [];
-
-        for (let key of this.sortedTimeStamps) {
-            ret.push(this._messages[key]);
-        }
-        return ret;
+    get latestMessage() {
+        return this._messages[this._messages.length - 1];
     }
+
     messages(count = null, beforeTimeStamp = null) {
 
         // Short-circuit
@@ -307,29 +286,22 @@ var Thread = GObject.registerClass({
         const filterTime = beforeTimeStamp ? beforeTimeStamp : (GLib.DateTime.new_now_local().to_unix() * 1000);
         // Filter our cache to the timestamp requested
 
-        // let keysToGet = this.sortedTimeStamps.filter(k => k < filterTime);
         let filteredMessages = [];
 
         filteredMessages = this._messages.filter(k => k.date < filterTime);
         if (count < filteredMessages.length) {
-            debug("Need to fetch more messages");
             this.requestMoreMessagesFromDevice();
         }
 
         if (count) {
             filteredMessages = filteredMessages.slice(filteredMessages.length - count, count + 1);
-            // keysToGet = keysToGet.slice(keysToGet.length - count, count + 1);
+
         }
-        // debug(keysToGet)
-        // for ( let key of keysToGet ) {
-        //     filteredMessages.push(this._messages[key]);
-        // }
 
         return filteredMessages;
     }
 
     update(newThreadData) {
-        debug("Updating thread");
         // If the earliest date fetched matches the earliest date in our cache
         // there is no more to fetch.
         // if (newThreadData[0].date === this.sortedTimeStamps[0]) {
@@ -337,6 +309,13 @@ var Thread = GObject.registerClass({
         //     this._hasMoreMessages = false;
         //     return false;
         // }
+        // The initial message returned when we fetch conversations doesn't
+        // Contain a helpful messagetype--it's always 0 regardless of who sent.
+        // If we have a thread with only this message, lets delete it.
+        if (this._messages.length == 1 && this._messages[0].type == 0) {
+            this._messages = [];
+            this.model_items_changed(0, 1, 0);
+        }
         let messagesToAdd = [];
         for (let i = 0, len = newThreadData.length; i < len; i++) {
 
@@ -356,54 +335,31 @@ var Thread = GObject.registerClass({
             }
         }
         this.addMessages(messagesToAdd);
-        // this.updateSorting();
+
         return true;
     }
 
     addMessages(messages) {
-        // let initialLength = this._messages.length;
-        // if (!Array.isArray(messages))
-        //     messages = [messages];
-
-        // for (let message of messages) {
-        //     let key = message.date;
-        //     this._messages[key] = message;
-        // }
-
         let initialLength = this._messages.length;
         this._messages = this._messages.concat(messages);
         // Todo: If an update is called this is run for each message, we should delay it.
         if (this._messages.length > 0)
             this.setCacheTimestampExtremes();
+        this._messages.sort((a, b) => a.date - b.date);
+
         this.model_items_changed(initialLength, 0, messages.length);
-        this.updateSorting();
     }
 
     setCacheTimestampExtremes() {
-        // this._oldestCacheTimestamp = this.sortedTimeStamps[0];
-        // this._newestCacheTimestamp = this.sortedTimeStamps[this.sortedTimeStamps.length];
         this._oldestCacheTimestamp = this._messages.reduce((min, m) => m.date < min ? m.date : min, this._messages[0].date);
         this._newestCacheTimestamp = this._messages.reduce((max, m) => m.date > max ? m.date : max, this._messages[0].date);
-    }
-
-    updateSorting(timeStamps) {
-        // TOdo is this still necessary?
-        this._messages.sort((a, b) => {
-            return b.date - a.date;
-        });
     }
 
     get length() {
         return this.sortedTimeStamps.length;
     }
 
-    // add(message) {
-    //     this._messages.push(message);
-    // }
     *[Symbol.iterator] () {
-        // for ( let message_id in this.sortedTimeStamps) {
-        //     yield this._messages[message_id];
-        // }
         for (let message of this._messages) {
             yield message;
         }
@@ -415,10 +371,6 @@ var Thread = GObject.registerClass({
     }
 
     vfunc_get_n_items() {
-        // let ret = Object.keys(this._messages).length;
-        // debug(ret);
-        // return ret;
-        debug(this._messages.length);
         return this._messages.length;
     }
 
@@ -432,23 +384,19 @@ var Thread = GObject.registerClass({
         );
     }
     vfunc_get_item(position) {
-        debug("Getting item at" + position);
         // preemptively load more.
         if (position > this.get_n_items()) {
-            debug("Fetching more items");
             this.requestMoreMessagesFromDevice();
             return null;
         }
         if (position >= this.get_n_items())
             return null;
 
-        // let ret = this._messages[Object.keys(this._messages)[position]];
         let ret = this._messages[position];
-        debug(ret);
+
         if (ret === undefined) {
             return null;
         }
-        debug("HERE")
 
         ret = Object.assign(new GObject.Object(), ret);
         return ret;
@@ -459,7 +407,6 @@ var Thread = GObject.registerClass({
     }
 
     model_items_changed(position, removed, added) {
-        debug(`Position ${position} removed ${removed} added ${added}`);
         this.emit('items-changed', position, removed, added);
     }
 });

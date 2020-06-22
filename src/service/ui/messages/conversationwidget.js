@@ -90,8 +90,6 @@ var ConversationWidget = GObject.registerClass({
             this._holdPosition.bind(this)
         );
 
-        // this.plugin.threads.connect('messages-added', this._updateThreadMessages.bind(this));
-
         // Message List
         // this.list.set_header_func(this._headerMessages);
         // this.list.set_sort_func(this._sortMessages);
@@ -169,7 +167,7 @@ var ConversationWidget = GObject.registerClass({
         this._thread = thread;
         this.thread_id = thread._id;
 
-        let message = (thread) ? thread.firstMessage : null;
+        let message = (thread) ? thread.latestMessage : null;
 
         if (message && this.addresses.length === 0) {
             this.addresses = message.addresses;
@@ -263,7 +261,7 @@ var ConversationWidget = GObject.registerClass({
      * Messages
      */
     _createMessageRow(message) {
-        if(message === null) {
+        if (message === null) {
             return null;
         }
         // debug(message);

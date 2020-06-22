@@ -225,9 +225,9 @@ var Plugin = GObject.registerClass({
             // Handle existing threads
             let thread = this.threads.getThread(message.thread_id);
             if (thread && message.read === MessageStatus.READ) {
-                debug(thread);
+                // // debug(thread);
                 for (let msg of thread) {
-                    debug(msg);
+                    // debug(msg);
                     msg.read = MessageStatus.read;
                 }
                 // Can we implement foreach on the thread?
@@ -235,6 +235,7 @@ var Plugin = GObject.registerClass({
                 this._handleThread(thread);
             } else {
                 thread = this.threads.createThread(message);
+                thread.connect('request-messages', this._onConversationRequested.bind(this));
             }
         }
 
@@ -333,7 +334,6 @@ var Plugin = GObject.registerClass({
         }
     }
     _onConversationRequested(store, thread_id, numberToRequest, rangeStartTimestamp) {
-        debug("Requesting");
         this.requestConversation( thread_id, numberToRequest, rangeStartTimestamp);
     }
 
@@ -655,7 +655,7 @@ var getContactsForAddresses = function(device, addresses) {
 };
 
 var setAvatarVisible = function (row, visible) {
-    let incoming = (row.message.type === MessageBox.INBOX);
+    let incoming = (row.message.type === MessageBox.INBOX );
 
     // Adjust the margins
     if (visible) {

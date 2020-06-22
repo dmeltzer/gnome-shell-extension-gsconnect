@@ -412,18 +412,18 @@ var Plugin = GObject.registerClass({
     }
 
     requestUids() {
-        // this.device.sendPacket({
-        //     type: 'kdeconnect.contacts.request_all_uids_timestamps'
-        // });
+        this.device.sendPacket({
+            type: 'kdeconnect.contacts.request_all_uids_timestamps'
+        });
     }
 
     requestVCards(uids) {
-        // this.device.sendPacket({
-        //     type: 'kdeconnect.contacts.request_vcards_by_uid',
-        //     body: {
-        //         uids: uids
-        //     }
-        // });
+        this.device.sendPacket({
+            type: 'kdeconnect.contacts.request_vcards_by_uid',
+            body: {
+                uids: uids
+            }
+        });
     }
 
     destroy() {

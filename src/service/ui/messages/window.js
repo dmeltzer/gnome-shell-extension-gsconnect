@@ -207,10 +207,10 @@ var MessagingWindow = GObject.registerClass({
         let messages = {};
         let threads = this.plugin.threads;
         for (let thread of threads) {
-            let message = thread.firstMessage;
+            let message = thread.latestMessage;
             // Skip messages without a body (eg. MMS messages without text)
             if (message.body) {
-                messages[thread.id] = thread.firstMessage;
+                messages[thread.id] = message;
             }
         }
 
